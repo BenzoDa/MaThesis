@@ -1,0 +1,198 @@
+### Software used: R Studio ###
+
+# The code example I provided focuses on the brand "BMW" as a demonstration. 
+# However, the same code structure applies to other brands. All you need to do is replace "BMW" with the relevant brand name wherever it appears throughout the code.
+
+
+_________________________________________________________________
+################ 1: Sentiment analysis for "BMW" ################
+################ 1: Sentiment analysis for "BMW" ################
+################ 1: Sentiment analysis for "BMW" ################
+
+library(ggplot2)
+library(sentimentr)
+library(dplyr)
+library(lexicon)
+library(stringr)
+library(stopwords)
+library(stringr)
+library(SnowballC)
+library(tidytext)
+BMW <- read.csv("D:\\Users\\Dario\\Desktop\\HSG\\Master-Thesis\\Data Scraping & Sentiment\\Coding\\brand_electric_emobility_phev_ev_bev\\BMW.csv")
+BMW$Date <-as.Date(BMW$Date)
+BMW$Tweet <- tolower(BMW$Tweet)
+BMW <- BMW %>%
+filter(str_detect(Tweet,"acura|alfa-romeo|aston martin|audi|bentley|buick|byd|cadilac|chevrolet|chrysler|daewoo|daihatsu|dodge|ferrari|fiat|fisker|ford|gac|gmc|general motors|geely|genesis|geometry|honda|hummer|hyundai|infinity|isuzu|jaguar|jeep|kia|lamborghini|landrover|land rover|leapmotor|levc|lexus|lincoln|li auto|lucid|lotus|lynk|mazda|maserati|maybach|mclaren|mercedes-benz|mercedes|benz|mini|mitsubishi|nissan|nio|polestar|pontiac|porsche|ram|rivian|rolls royce|saab|seat|skoda|saturn|smart|subaru|suzuki|tesla|tsla|toyota|volkswagen|vw|volvo|xpeng", negate = TRUE))
+clean_text <- function(text) {
+text <- iconv(text, from = "ISO-8859-1", to = "UTF-8") # convert to UTF-8
+text <- str_replace_all(text, "http\\S+", "")
+text <- str_replace_all(text, "[^[:print:]]", "")
+text <- str_replace_all(text, "[ðÿâï]+", " ")
+text <- str_replace_all(text, "[^[:alnum:]\\s]", "")
+text <- str_replace_all(text, "\\s+", " ")
+text <- str_split(text, "\\s+") %>%
+    unlist() %>%
+    str_c(collapse = " ")
+  return(text)}
+BMW$clean_tweet <- str_trim(sapply(BMW$Tweet, clean_text))
+BMWsentiment_tweet <- sentiment_by(BMW$clean_tweet, polarity_dt=hash_sentiment_jockers_rinker)
+BMW <- cbind(BMW, BMWsentiment_tweet[,-1])
+BMWdate_sentiment <- aggregate(ave_sentiment ~ Date, BMW, mean)
+ggplot(BMWdate_sentiment, aes(x = Date, y = ave_sentiment)) +
+    geom_point(size=0, color="transparent") +
+    geom_smooth(method="loess", size=.8, se=T, span = 0.5, color= "black") +
+    geom_hline(yintercept=0, size=0.4, linetype=1, color = "darkblue", alpha=0.6) + 
+    ylab("Average Sentiment") +  
+    coord_cartesian(ylim = c(-0.1, 0.15))+ 
+    xlab("Year") + 
+    labs(title="Action Title", subtitle="Sentiment of BMW Tweets", caption="insert caption here") +
+    theme(text=element_text(size=14,  family="serif"),
+          axis.line.x=element_line(color="darkgrey", size=0.5, linetype="solid"),
+          axis.line.y=element_line(color="darkgrey", size=0.51, linetype="solid"),
+          axis.text=element_text(size=12, family="serif"),
+          axis.title=element_text(size=12, family="serif"),
+          axis.title.x=element_text(margin=margin(t=10), vjust=0.5),
+          axis.title.y=element_text(margin=margin(r=15), vjust=0.5))
+model <- lm(ave_sentiment ~ Date, data = BMWdate_sentiment)
+summary(model)$coefficients[2, 4]
+
+
+
+
+
+______________________________________________________________
+################ 2: Topic Modelling for "BMW" ################
+################ 2: Topic Modelling for "BMW" ################
+################ 2: Topic Modelling for "BMW" ################
+
+library(ggplot2)
+library(dplyr)
+library(stopwords)
+library(stringr)
+library(SnowballC)
+library(tm)
+library(tidyverse)
+library(tidytext)
+library(topicmodels)
+library(ldatuning)
+BMW <- read.csv("D:\\Users\\Dario\\Desktop\\HSG\\Master-Thesis\\Data Scraping & Sentiment\\Coding\\brand_electric_emobility_phev_ev_bev\\BMW.csv")
+BMW$Date <-as.Date(BMW$Date)
+BMW$Tweet <- tolower(BMW$Tweet)
+BMW <- BMW %>%
+filter(str_detect(Tweet,"acura|alfa-romeo|aston martin|audi|bentley|buick|byd|cadilac|chevrolet|chrysler|daewoo|daihatsu|dodge|ferrari|fiat|fisker|ford|gac|gmc|general motors|geely|genesis|geometry|honda|hummer|Hyundai|infinity|isuzu|jaguar|jeep|kia|lamborghini|landrover|land rover|leapmotor|levc|lexus|lincoln|li auto|lucid|lotus|lynk|mazda|maserati|maybach|mclaren|mercedes-benz|mercedes|benz|mini|mitsubishi|nissan|nio|polestar|pontiac|porsche|ram|rivian|rolls royce|saab|seat|skoda|saturn|smart|subaru|suzuki|tesla|tsla|toyota|volkswagen|vw|volvo|xpeng", negate = TRUE))
+library(textstem)
+library(stringr)
+
+# Define custom exceptions and mappings
+custom_exceptions <- c("china", "chine", "chinese", "chines", "bus", "buse", "buses")
+custom_exceptions_mapping <- c("china" = "china", "chine" = "china", "chinese" = "china", "chines" = "china",
+                               "bus" = "bus", "buse" = "bus", "buses" = "bus")
+clean_text <- function(text) {
+  text <- iconv(text, from = "ISO-8859-1", to = "UTF-8") # convert to UTF-8
+  text <- str_replace_all(text, "http\\S+", "")
+  text <- str_replace_all(text, "[^[:print:]]", "")
+  text <- str_replace_all(text, "[ðÿâï]+", " ")
+  text <- str_replace_all(text, "[^[:alnum:]\\s]", "")
+  text <- str_replace_all(text, "\\s+", " ")
+
+# stemming
+  words <- str_split(text, "\\s+") %>% unlist()
+  words <- wordStem(words, language = "en")
+  # Handle custom exceptions
+  words <- ifelse(words %in% custom_exceptions, custom_exceptions_mapping[words], words)
+    text <- str_c(words, collapse = " ")
+
+    words_to_filter <- c("bmw", "e-mobility", "emobility", "bev", "ev", "phev", "electr", "car", "vehicl", "amp", "realli", "veri", "onli","don", "anoth", "doe", "becaus")
+  if (any(words_to_filter %in% str_split(text, "\\s+")[[1]])) {
+    text <- str_replace_all(text, paste(words_to_filter, collapse = "|"), "")
+  } 
+  return(text)
+}
+BMW$clean_tweet <- str_trim(sapply(BMW$Tweet, clean_text))
+
+# create document-term matrix and fit LDA
+BMWdtm <- BMW %>%
+    unnest_tokens(word, clean_tweet) %>%
+    anti_join(stop_words) %>%
+    count(Date, User, word) %>%
+    cast_dtm(Date, word, n)
+#find optimal topics
+BMWtopicNumberMetrics <- FindTopicsNumber(BMWdtm,
+    topics = seq(from = 2, to = 15, by = 1),
+    metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"),
+    control = list(seed = 1234),
+    verbose = TRUE)
+FindTopicsNumber_plot(BMWtopicNumberMetrics)
+BMWlda_model <- LDA(BMWdtm, k = 8, control = list(seed=100))
+BMWtopics <- tidy(BMWlda_model, matrix = "beta")
+
+# plot topics
+BMWtopTerms <- BMWtopics %>%
+    group_by(topic) %>%
+    top_n(15, beta) %>%
+    ungroup() %>%
+arrange(topic, -beta)
+BMWtopTerms %>%
+ mutate(term = reorder(term, beta)) %>%
+ group_by(topic, term) %>%
+ arrange(desc(beta)) %>%
+ ungroup() %>% 
+ mutate(term = factor(paste(term, topic, sep = "__"),
+ levels = rev(paste(term, topic, sep = "__")))) %>% 
+ ggplot(aes(term, beta, fill = as.factor(topic))) + 
+ geom_col(show.legend = FALSE) + 
+ coord_flip() + 
+ scale_x_discrete(labels = function(x) gsub("__.+$", "", x)) +
+ labs(title = "BMW - Top 15 terms in each LDA topic",
+ x = NULL, y = expression(beta)) +  
+ facet_wrap(~ topic, ncol = 3, scales = "free")+
+theme(text=element_text(size=14,  family="serif"),
+          axis.line.x=element_line(color="darkgrey", size=0.5, linetype="solid"),
+          axis.line.y=element_line(color="darkgrey", size=0.51, linetype="solid"),
+          axis.text=element_text(size=14, family="serif"),
+          axis.title=element_text(size=14, family="serif"),
+          axis.title.x=element_text(margin=margin(t=10), vjust=0.5, family="serif"),
+          axis.title.y=element_text(margin=margin(r=15), vjust=0.5, family="serif"))
+
+
+______________________________________________________________________________
+################ 2: VAR model and Granger causality for "BMW" ################
+################ 2: VAR model and Granger causality for "BMW" ################
+################ 2: VAR model and Granger causality for "BMW" ################
+
+library(urca)
+library(tseries)
+library(dplyr)
+library(tidyverse)
+library(vars)
+library(stargazer)
+library(ggplot2)
+BMWstock <- read.csv("D:\\Users\\Dario\\Desktop\\HSG\\Master-Thesis\\Stock Market Data\\TSLA.csv")
+BMWstock <- BMWstock %>% select(-c(Open, High, Low, Adj.Close, Volume))
+BMWstock$Date <-as.Date(BMWstock$Date)
+BMWcombined <- left_join(BMWdate_sentiment, BMWstock)
+BMWcombined <- na.omit(BMWcombined)
+BMWcombined <- subset(BMWcombined, select = c("ave_sentiment","Close"))
+BMWts_senti <-ts(BMWcombined$ave_sentiment,start=c(2018,1), frequency = 365,end = c(2022, 365))
+BMWts_stock <-ts(BMWcombined$Close,start=c(2018,1), frequency = 365,end = c(2022, 365))
+adf.test(BMWts_senti)
+adf.test(BMWts_stock)
+BMWts_stock<- diff(BMWts_stock)
+adf.test(BMWts_stock)
+
+#VAR MODEL
+BMWcombined$Close <- as.numeric(BMWcombined$Close)
+BMWcombined$Close <- c(0, diff(BMWcombined$Close))
+BMWlag <-VARselect(BMWcombined)
+BMWlag
+BMWestim<-VAR(BMWcombined, p=1, type="none")
+summary(BMWestim)
+stargazer(BMWestim[["varresult"]],type='text')
+roots(BMWestim, modulus=TRUE)
+
+#Granger Causality
+BMWgranger1<-causality(BMWestim,cause="ave_sentiment")
+BMWgranger2<-causality(BMWestim,cause="Close")
+BMWgranger1
+BMWgranger2
+
