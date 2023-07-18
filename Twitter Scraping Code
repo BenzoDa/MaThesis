@@ -1,3 +1,5 @@
+### Python script for Twitter scraping ###
+
 import snscrape.modules.twitter as twitterScraper
 import pandas as pd
 
